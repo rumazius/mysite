@@ -1,13 +1,19 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, HttpRequest
-from django.contrib.auth.forms import UserCreationForm
 from .forms import CreateUserForm
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login
 import pdfkit
-from django.template import Context, Template, loader
+from django.template.loader import get_template
+
+
+def blankPage(request: HttpRequest):
+    return redirect('login')
+
 
 def registerPage(request: HttpRequest) -> HttpResponse:
+    if request.user.is_authenticated:
+        return redirect('home')
     form = CreateUserForm()
 
     if request.method == "POST":
@@ -22,6 +28,9 @@ def registerPage(request: HttpRequest) -> HttpResponse:
 
 
 def loginPage(request: HttpRequest) -> HttpResponse:
+    if request.user.is_authenticated:
+        return redirect('home')
+
     form = CreateUserForm()
 
     if request.method == "POST":
@@ -36,13 +45,14 @@ def loginPage(request: HttpRequest) -> HttpResponse:
         else:
             return redirect('register')
 
-    # context = {"form": form}
-
     context = {}
     return render(request, 'login.html', context)
 
 
 def homePage(request: HttpRequest) -> HttpResponse:
+    if not request.user.is_authenticated:
+        return redirect('login')
+
     context = {}
     if request.method == "POST":
         surname = request.POST.get('surname')
@@ -51,7 +61,6 @@ def homePage(request: HttpRequest) -> HttpResponse:
         motivation = request.POST.get('motivation')
         achievements = request.POST.get('achievements')
         context = {
-            'debug': "afd;kvgna;f",
             'surname': request.POST.get('surname'),
             'education': request.POST.get('education'),
             'skills': request.POST.get('skills'),
@@ -60,12 +69,12 @@ def homePage(request: HttpRequest) -> HttpResponse:
             'job_type': request.POST.get('job_type'),
         }
 
-        t = render(request, 'cvpage.html', context)
-        t = loader.get_template('cvpage.html')
-        st = t.render(context)
-        return render(request, 'cvpage.html', context)
-    return render(request, 'home.html', context)
+        page = get_template('cvpage.html')
+        t = page.render(context)
+        config = pdfkit.configuration(wkhtmltopdf='/usr/bin/wkhtmltopdf')
+        ready_cv = pdfkit.from_string(t, False, configuration=config, options={"enable-local-file-access": ""})
+        resp = HttpResponse(ready_cv, content_type='application/pdf')
+        resp['Content-Disposition'] = 'attachment; filename=cv.pdf'
 
-# def readycv(request: HttpRequest):
-#     context = {}
-#     return render(request, 'cvpage.html', context)
+        return resp
+    return render(request, 'home.html', context)
